@@ -39,18 +39,21 @@ Workflow Configure-CMPostinstall {
 				[string]$OUAppGroups
 			)
 			# Appending Domain to AD OU Paths
-			$Domain = $env:USERDNSDOMAIN.Split('.')
-			$OULaptops = 'LDAP://' + $OULaptops + ",DC=$($Domain[0]),DC=$($Domain[1])"
-			$OUDesktops = 'LDAP://' + $OUDesktops + ",DC=$($Domain[0]),DC=$($Domain[1])"
-			$OUUsers = 'LDAP://' + $OUUsers + ",DC=$($Domain[0]),DC=$($Domain[1])"
-			$OUAppGroups = 'LDAP://' + $OUAppGroups + ",DC=$($Domain[0]),DC=$($Domain[1])"
+			$Domain = (Get-ADDomain).DistinguishedName
+			$OULaptops = 'LDAP://' + $OULaptops + ",$Domain)"
+			$OUDesktops = 'LDAP://' + $OUDesktops + ",$Domain"
+			$OUUsers = 'LDAP://' + $OUUsers + ",$Domain"
+			$OUAppGroups = 'LDAP://' + $OUAppGroups + ",$Domain"
 						   
 			# Importing Configuration Manager Powershell module
 			try {
 				Write-Verbose "Importing Configuration Manager Powershell module" -Verbose
 				Import-Module $env:SMS_ADMIN_UI_PATH.Replace("\bin\i386","\bin\configurationmanager.psd1")
-				$SiteCode = Get-PSDrive -PSProvider CMSITE
-				Set-Location "$($SiteCode.Name):\"
+				# NOTE ConfigMgr PSDrive is not created when importing CMModule if console havent't been started(like in our case), PSDrive must be created manually like this
+				$SiteCode = $(Get-WMIObject -ComputerName "$env:ComputerName" -Namespace "root\SMS" -Class "SMS_ProviderLocation").SiteCode
+				New-PSDrive -Name $SiteCode -PSProvider "AdminUI.PS.Provider\CMSite" -Root "$ENV:COMPUTERNAME" -Description "SCCM Primary Site"
+				Set-Location "$SiteCode`:"
+
 			} catch {
 				Write-Verbose "Failed to load Configuration Manager Powershell module" -Verbose
 				Write-Error $_.Exception
