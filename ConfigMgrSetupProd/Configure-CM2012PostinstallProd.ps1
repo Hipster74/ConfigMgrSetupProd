@@ -1,4 +1,4 @@
-Workflow Configure-CMPostinstall {
+Workflow Configure-CMPostinstallProd {
 	Param(
 		[Parameter(Mandatory=$true)]
         [string]$VMName,
@@ -28,6 +28,7 @@ Workflow Configure-CMPostinstall {
 		$InvokeCommandOptions = New-PSSessionOption -SkipCACheck
         Invoke-Command -ComputerName $Using:VMName `
                        -Credential $Using:VMCredential `
+					   -Authentication Credssp `
 					   -ArgumentList $CMNetworkAccountCredential,$OULaptops,$OUDesktops,$OUUsers,$OUAppGroups `
                        -SessionOption $InvokeCommandOptions `
                        -ScriptBlock {
@@ -40,7 +41,7 @@ Workflow Configure-CMPostinstall {
 			)
 			# Appending Domain to AD OU Paths
 			$Domain = (Get-ADDomain).DistinguishedName
-			$OULaptops = 'LDAP://' + $OULaptops + ",$Domain)"
+			$OULaptops = 'LDAP://' + $OULaptops + ",$Domain"
 			$OUDesktops = 'LDAP://' + $OUDesktops + ",$Domain"
 			$OUUsers = 'LDAP://' + $OUUsers + ",$Domain"
 			$OUAppGroups = 'LDAP://' + $OUAppGroups + ",$Domain"
@@ -51,7 +52,7 @@ Workflow Configure-CMPostinstall {
 				Import-Module $env:SMS_ADMIN_UI_PATH.Replace("\bin\i386","\bin\configurationmanager.psd1")
 				# NOTE ConfigMgr PSDrive is not created when importing CMModule if console havent't been started(like in our case), PSDrive must be created manually like this
 				$SiteCode = $(Get-WMIObject -ComputerName "$env:ComputerName" -Namespace "root\SMS" -Class "SMS_ProviderLocation").SiteCode
-				New-PSDrive -Name $SiteCode -PSProvider "AdminUI.PS.Provider\CMSite" -Root "$ENV:COMPUTERNAME" -Description "SCCM Primary Site"
+				New-PSDrive -Name $SiteCode -PSProvider "AdminUI.PS.Provider\CMSite" -Root "$env:ComputerName" -Description "SCCM Primary Site"
 				Set-Location "$SiteCode`:"
 
 			} catch {
@@ -126,32 +127,32 @@ Workflow Configure-CMPostinstall {
 			$GroupDiscovery | Set-CimInstance -Property @{PropLists = $GroupDiscovery.PropLists}
 
 			# Configure User Discovery
-			Write-Verbose "Configuring User Discovery on OU $OUUsers" -Verbose
-			$UserDiscoverySchedule = New-CMSchedule -Start '2015/01/01 00:00:00' -RecurInterval Days -RecurCount 1
+			#Write-Verbose "Configuring User Discovery on OU $OUUsers" -Verbose
+			#$UserDiscoverySchedule = New-CMSchedule -Start '2015/01/01 00:00:00' -RecurInterval Days -RecurCount 1
 
-			Set-CMDiscoveryMethod -ActiveDirectoryUserDiscovery `
-			  -EnableDeltaDiscovery $true `
-			  -DeltaDiscoveryIntervalMinutes 5 `
-			  -PollingSchedule $UserDiscoverySchedule `
-			  -Enabled $true
+			#Set-CMDiscoveryMethod -ActiveDirectoryUserDiscovery `
+			#  -EnableDeltaDiscovery $true `
+			#  -DeltaDiscoveryIntervalMinutes 5 `
+			#  -PollingSchedule $UserDiscoverySchedule `
+			#  -Enabled $true
 
-			$UserDiscovery = Get-CimInstance `
-			  -Namespace "root/sms/site_$SiteCode" `
-			  -ClassName SMS_SCI_Component `
-			  -Filter 'ComponentName = "SMS_AD_USER_DISCOVERY_AGENT"'
+			#$UserDiscovery = Get-CimInstance `
+			#  -Namespace "root/sms/site_$SiteCode" `
+			#  -ClassName SMS_SCI_Component `
+			#  -Filter 'ComponentName = "SMS_AD_USER_DISCOVERY_AGENT"'
 
-			$UserDiscoveryProps = $UserDiscovery.PropLists | Where-Object {$_.PropertyListName -eq 'AD Containers'}
-			$UserDiscoveryProps.Values = $OUUsers, 0, 1
-			$UserDiscovery | Set-CimInstance -Property @{PropLists = $UserDiscovery.PropLists}
+			#$UserDiscoveryProps = $UserDiscovery.PropLists | Where-Object {$_.PropertyListName -eq 'AD Containers'}
+			#$UserDiscoveryProps.Values = $OUUsers, 0, 1
+			#$UserDiscovery | Set-CimInstance -Property @{PropLists = $UserDiscovery.PropLists}
 
 			# Restart SMS_SITE_COMPONENT_MANAGER Service
 			Write-Verbose "Restarting SMS_SITE_COMPONENT_MANAGER Service" -Verbose
 			Get-Service -Name SMS_SITE_COMPONENT_MANAGER | Restart-Service
 
 			# Create LAB Boundary
-			New-CMBoundary -Type ADSite -DisplayName LAB -Value LAB  
-			New-CMBoundaryGroup -Name LAB -DefaultSiteCode LAB  
-			Add-CMBoundaryToGroup -BoundaryGroupName LAB -BoundaryName LAB  
+			#New-CMBoundary -Type ADSite -DisplayName LAB -Value LAB  
+			#New-CMBoundaryGroup -Name LAB -DefaultSiteCode LAB  
+			#Add-CMBoundaryToGroup -BoundaryGroupName LAB -BoundaryName LAB  
 		
 			# Configure Distributionpoint to respond to PXErequests and enable unknown computersupport
 			Get-CMDistributionPoint | Set-CMDistributionPoint -EnablePXESupport $true -AllowRespondIncomingPxeRequest $true -EnableUnknownComputerSupport $true -EnableValidateContent $true -AddBoundaryGroupName LAB -ClientCommunicationType HTTP			   
